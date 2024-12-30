@@ -35,28 +35,39 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>CODIGO</th>
+                        <th>RUC Empresa</th>
+                        <th>RUC Cliente</th>
+                        <th>RUM</th>
+                        <th>Local</th>
+                        <th>Numero de Factura</th>
                         <th>DESCRIPCION</th>
-                        <th>TOTAL_ITEM</th>
-                        <th>DIRECCION_CLIENTE</th>
-                        <th>LOCAL</th>
                         <th>Fecha de Emisión</th>
                         <th>Total</th>
                         <th>Estado</th>
+                        <th>Documento</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($items as $item)
                     <tr>
-                        <td>{{ $item['DOCUMENT_1']['DETALLE_FACTURA'][0]['CODIGO'] ?? '-'}}</td>
-                        <td>{{ $item['DOCUMENT_1']['DETALLE_FACTURA'][0]['DESCRIPCION'] ?? '-'}}</td>
-                        <td>{{ $item['DOCUMENT_1']['DETALLE_FACTURA'][0]['TOTAL_ITEM    '] ?? '-'}}</td>
-                        <td>{{ $item['DOCUMENT_1']['DIRECCION_CLIENTE'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['RUC_EMPRESA'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['RUC_CLIENTE'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['RUM'] ?? '-'}}</td>
                         <td>{{ $item['DOCUMENT_1']['LOCAL'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['NUMERO_FACTURA'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['DETALLE_FACTURA'][0]['DESCRIPCION'] ?? '-'}}</td>
 
-                        <td>{{ $item['DOCUMENT_1']['FECHA_EMISION'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['FECHA_EMISION'] ??'-'}}</td>
                         <td>{{ $item['DOCUMENT_1']['TOTAL_FACTURA'] ??'-'}}</td>
                         <td>{{ $item['DOCUMENT_1']['ESTADO_DOCUMENTO'] ?? '-'}}</td>
+                        <td>
+                            <form action="{{route('document')}}" method="post">
+                                @csrf
+                                <input type="text" name="key" value="{{$item['DOCUMENT_ID'] ?? '-'}}" hidden>
+                                <button class="btn btn-primary" type="submit">Descargar</button>
+                            </form>
+                           {{--  <a href="{{ route('document', $item['DOCUMENT_ID'] ?? '-') }}" class="btn btn-primary" target="_blank">ver</a> --}}
+                        </td>
                     </tr>
                     @endforeach
                 </tbody>

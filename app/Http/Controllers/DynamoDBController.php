@@ -60,4 +60,11 @@ class DynamoDBController extends Controller
             ], 500);
         }
     }
+
+    public function documento(Request $reques){
+        $signedUrl = $this->dynamoDBService->generateImage($reques->key.'.png');
+        return redirect()->to($signedUrl);
+
+        //return redirect()->to((string)$signedUrl);
+    }
 }

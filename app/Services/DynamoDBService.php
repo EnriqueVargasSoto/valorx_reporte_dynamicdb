@@ -9,6 +9,9 @@ use Aws\DynamoDb\Exception\DynamoDbException;
 
 use Aws\DynamoDb\ScanCommand; // Importa la clase ScanCommand
 use Aws\CommandInterface; // Si usas comandos adicionales
+use Illuminate\Support\Facades\Storage;
+use Aws\S3\S3Client;
+use Aws\Exception\AwsException;
 
 class DynamoDBService
 {
@@ -104,6 +107,7 @@ class DynamoDBService
                     'MODIFY_DATE' => $item['MODIFY_DATE']['S'] ?? null,
                     'MODIFY_USER' => $item['MODIFY_USER']['S'] ?? null,
                     'STATUS' => $item['STATUS']['S'] ?? null,
+                    'IMAGEN' => $this->generateImage($item['DOCUMENT_ID']['S'])
                 ];
             }, $result['Items']);
 
@@ -122,38 +126,78 @@ class DynamoDBService
     }
 
     public function fetchAllDocuments()
-{
-    $params = [
-        'TableName' => env('AWS_DYNAMODB_TABLE'),
-    ];
+    {
+        $params = [
+            'TableName' => env('AWS_DYNAMODB_TABLE'),
+        ];
 
-    $allItems = [];
-    try {
-        do {
-            $result = $this->dynamoDb->scan($params);
+        $allItems = [];
+        try {
+            do {
+                $result = $this->dynamoDb->scan($params);
 
-            // Agregar los elementos de la página actual a la lista completa
-            $allItems = array_merge($allItems, $result['Items']);
+                // Agregar los elementos de la página actual a la lista completa
+                $allItems = array_merge($allItems, $result['Items']);
 
-            // Configurar el token para obtener la siguiente página
-            $params['ExclusiveStartKey'] = $result['LastEvaluatedKey'] ?? null;
+                // Configurar el token para obtener la siguiente página
+                $params['ExclusiveStartKey'] = $result['LastEvaluatedKey'] ?? null;
 
-        } while (!empty($params['ExclusiveStartKey']));
+            } while (!empty($params['ExclusiveStartKey']));
 
-        // Opcionalmente, puedes mapear los resultados si lo necesitas
-        return array_map(function ($item) {
-            return [
-                'DOCUMENT_ID' => $item['DOCUMENT_ID']['S'] ?? null,
-                'FACTURA_ID' => $item['FACTURA_ID']['S'] ?? null,
-                'FECHA' => $item['FECHA']['S'] ?? null,
-                'DIRECCION' => $item['DIRECCION']['S'] ?? null,
-                'TOTAL' => $item['TOTAL']['S'] ?? null,
-                // Agrega más campos si es necesario
-            ];
-        }, $allItems);
+            // Opcionalmente, puedes mapear los resultados si lo necesitas
+            return array_map(function ($item) {
+                return [
+                    'DOCUMENT_ID' => $item['DOCUMENT_ID']['S'] ?? null,
+                    'FACTURA_ID' => $item['FACTURA_ID']['S'] ?? null,
+                    'FECHA' => $item['FECHA']['S'] ?? null,
+                    'DIRECCION' => $item['DIRECCION']['S'] ?? null,
+                    'TOTAL' => $item['TOTAL']['S'] ?? null,
+                    // Agrega más campos si es necesario
+                ];
+            }, $allItems);
 
-    } catch (DynamoDbException $e) {
-        throw new \Exception('Could not fetch documents: ' . $e->getMessage());
+        } catch (DynamoDbException $e) {
+            throw new \Exception('Could not fetch documents: ' . $e->getMessage());
+        }
     }
-}
+
+    public function generateImage($key){
+
+        $s3Client = new S3Client([
+            'version' => 'latest',
+            'region'  => env('AWS_DEFAULT_REGION'),
+            'credentials' => [
+                'key'    => env('AWS_ACCESS_KEY_ID'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            ],
+        ]);
+
+        try {
+            $command = $s3Client->getCommand('GetObject', [
+                'Bucket' => env('AWS_BUCKET'),
+                'Key'    => $key,
+            ]);
+
+            // Generar la URL firmada con expiración de 1 hora
+            $signedUrl = $s3Client->createPresignedRequest($command, '+60 minutes')->getUri();
+            return (string)$signedUrl;//response()->json(['url' => (string)$signedUrl]);
+        } catch (AwsException $e) {
+            return response()->json(['error' => 'Could not generate signed URL: ' . $e->getMessage()], 500);
+        }
+
+        /* try {
+            // $path es la ruta relativa del archivo dentro del bucket
+            $url = Storage::disk('s3')->url($path, now()->addMinutes(15));
+
+            return response()->json([
+                'success' => true,
+                'image_url' => $url,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener la URL de la imagen: ' . $e->getMessage(),
+            ], 500);
+        } */
+    }
 }
