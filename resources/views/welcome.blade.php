@@ -20,6 +20,13 @@
         @endif
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
 
+
+        <style>
+            .document-list { margin-bottom: 20px; }
+            .pagination { display: flex; list-style-type: none; }
+            .pagination li { margin: 0 5px; cursor: pointer; }
+        </style>
+
     </head>
     <body>
 
@@ -28,25 +35,35 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Factura ID</th>
-                        <th>Fecha</th>
-                        <th>Dirección</th>
+                        <th>CODIGO</th>
+                        <th>DESCRIPCION</th>
+                        <th>TOTAL_ITEM</th>
+                        <th>DIRECCION_CLIENTE</th>
+                        <th>LOCAL</th>
+                        <th>Fecha de Emisión</th>
                         <th>Total</th>
+                        <th>Estado</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($data as $item)
-                        <tr>
-                            <td>{{ $item['DOCUMENT_ID']['S'] }}</td>
-                            <td>{{ $item['FACTURA_ID']['S'] }}</td>
-                            <td>{{ $item['FECHA']['S'] ?? '-' }}</td>
-                            <td>{{ $item['DIRECCION']['S'] ?? '-'}}</td>
-                            <td>{{ $item['TOTAL']['S'] ?? '-'}}</td>
-                        </tr>
+                    @foreach ($items as $item)
+                    <tr>
+                        <td>{{ $item['DOCUMENT_1']['DETALLE_FACTURA'][0]['CODIGO'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['DETALLE_FACTURA'][0]['DESCRIPCION'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['DETALLE_FACTURA'][0]['TOTAL_ITEM    '] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['DIRECCION_CLIENTE'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['LOCAL'] ?? '-'}}</td>
+
+                        <td>{{ $item['DOCUMENT_1']['FECHA_EMISION'] ?? '-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['TOTAL_FACTURA'] ??'-'}}</td>
+                        <td>{{ $item['DOCUMENT_1']['ESTADO_DOCUMENTO'] ?? '-'}}</td>
+                    </tr>
                     @endforeach
                 </tbody>
             </table>
+            @if($lastEvaluatedKey)
+    <a href="{{ route('/', ['lastEvaluatedKey' => $lastEvaluatedKey]) }}" class="btn btn-primary">Siguiente</a>
+@endif
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>

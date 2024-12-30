@@ -7,6 +7,6 @@ use Illuminate\Support\Facades\Route;
 //     return view('welcome');
 // });
 
-Route::get('/', [DynamoDBController::class,'index']);
+Route::get('/', [DynamoDBController::class,'index'])->name('/');
 
 Route::get('list', [DynamoDBController::class,'listDocuments']);
