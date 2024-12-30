@@ -62,9 +62,10 @@ class DynamoDBController extends Controller
     }
 
     public function documento(Request $reques){
-        $signedUrl = $this->dynamoDBService->generateImage($reques->key.'.png');
-        return redirect()->to($signedUrl);
 
+        /* $signedUrl = $this->dynamoDBService->generateImage($reques->key.'.png');
+        return redirect()->to($signedUrl); */
+        return $this->dynamoDBService->generateImage($reques->key. '.png');
         //return redirect()->to((string)$signedUrl);
     }
 }

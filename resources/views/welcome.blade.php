@@ -35,7 +35,7 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>RUC Empresa</th>
+                        {{-- <th>RUC Empresa</th> --}}
                         <th>RUC Cliente</th>
                         <th>RUM</th>
                         <th>Local</th>
@@ -50,7 +50,7 @@
                 <tbody>
                     @foreach ($items as $item)
                     <tr>
-                        <td>{{ $item['DOCUMENT_1']['RUC_EMPRESA'] ?? '-'}}</td>
+                        {{-- <td>{{ $item['DOCUMENT_1']['RUC_EMPRESA'] ?? '-'}}</td> --}}
                         <td>{{ $item['DOCUMENT_1']['RUC_CLIENTE'] ?? '-'}}</td>
                         <td>{{ $item['DOCUMENT_1']['RUM'] ?? '-'}}</td>
                         <td>{{ $item['DOCUMENT_1']['LOCAL'] ?? '-'}}</td>
@@ -61,11 +61,12 @@
                         <td>{{ $item['DOCUMENT_1']['TOTAL_FACTURA'] ??'-'}}</td>
                         <td>{{ $item['DOCUMENT_1']['ESTADO_DOCUMENTO'] ?? '-'}}</td>
                         <td>
-                            <form action="{{route('document')}}" method="post">
+                            <form action="{{route('document')}}" method="post" target="_blank">
                                 @csrf
                                 <input type="text" name="key" value="{{$item['DOCUMENT_ID'] ?? '-'}}" hidden>
-                                <button class="btn btn-primary" type="submit">Descargar</button>
+                                <button class="btn btn-primary" type="submit">Ver</button>
                             </form>
+
                            {{--  <a href="{{ route('document', $item['DOCUMENT_ID'] ?? '-') }}" class="btn btn-primary" target="_blank">ver</a> --}}
                         </td>
                     </tr>
@@ -78,6 +79,33 @@
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+
+        <script>
+            function openDocument(imageKey) {
+                window.open(imageKey, '_blank');
+                // Hacer la solicitud POST al backend para obtener la URL firmada
+                /* fetch('/documento', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'  // Asegúrate de incluir el token CSRF
+                    },
+                    body: JSON.stringify({ key: imageKey })  // Enviar el 'key' como cuerpo del POST
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.url) {
+                        // Abre la URL firmada en una nueva pestaña
+                        window.open(data.url, '_blank');
+                    } else {
+                        alert('No se pudo generar la URL firmada.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                }); */
+            }
+        </script>
 
     </body>
 </html>

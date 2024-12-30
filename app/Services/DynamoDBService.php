@@ -12,6 +12,7 @@ use Aws\CommandInterface; // Si usas comandos adicionales
 use Illuminate\Support\Facades\Storage;
 use Aws\S3\S3Client;
 use Aws\Exception\AwsException;
+use Illuminate\Support\Facades\Response;
 
 class DynamoDBService
 {
@@ -107,7 +108,7 @@ class DynamoDBService
                     'MODIFY_DATE' => $item['MODIFY_DATE']['S'] ?? null,
                     'MODIFY_USER' => $item['MODIFY_USER']['S'] ?? null,
                     'STATUS' => $item['STATUS']['S'] ?? null,
-                    'IMAGEN' => $this->generateImage($item['DOCUMENT_ID']['S'])
+                    /* 'IMAGEN' => $this->generateImage($item['DOCUMENT_ID']['S']) */
                 ];
             }, $result['Items']);
 
@@ -176,28 +177,25 @@ class DynamoDBService
             $command = $s3Client->getCommand('GetObject', [
                 'Bucket' => env('AWS_BUCKET'),
                 'Key'    => $key,
+                'ResponseCacheControl' => 'no-cache',
+                'ResponseContentDisposition' => 'inline', // Asegúrate de que el archivo se muestre en línea
+                'ResponseContentType' => 'image/png', // Tipo de contenido correcto para imágenes PNG
             ]);
 
             // Generar la URL firmada con expiración de 1 hora
             $signedUrl = $s3Client->createPresignedRequest($command, '+60 minutes')->getUri();
-            return (string)$signedUrl;//response()->json(['url' => (string)$signedUrl]);
+            //return redirect()->to((string)$signedUrl);//return (string)$signedUrl;//response()->json(['url' => (string)$signedUrl]);
+
+            // Obtener el archivo desde la URL firmada
+            $fileContent = file_get_contents((string)$signedUrl);
+
+            // Retornar la imagen con el tipo MIME correcto
+            return Response::make($fileContent, 200, [
+                'Content-Type' => 'image/png', // Cambiar según el tipo de archivo si es necesario
+                'Content-Disposition' => 'inline; filename="' . basename($key) . '"'
+            ]);
         } catch (AwsException $e) {
             return response()->json(['error' => 'Could not generate signed URL: ' . $e->getMessage()], 500);
         }
-
-        /* try {
-            // $path es la ruta relativa del archivo dentro del bucket
-            $url = Storage::disk('s3')->url($path, now()->addMinutes(15));
-
-            return response()->json([
-                'success' => true,
-                'image_url' => $url,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener la URL de la imagen: ' . $e->getMessage(),
-            ], 500);
-        } */
     }
 }
