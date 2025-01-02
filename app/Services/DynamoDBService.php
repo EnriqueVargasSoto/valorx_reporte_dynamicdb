@@ -55,21 +55,39 @@ class DynamoDBService
         }
     }
 
-    public function fetchDocuments($limit, $lastEvaluatedKey = null)
+    public function fetchDocuments($limit, $lastEvaluatedKey = null, $previousEvaluatedKey = null,  $searchTerm = null)
     {
         $params = [
             'TableName' => env('AWS_DYNAMODB_TABLE'),
             'Limit' => $limit,
         ];
 
-        // Si tenemos una última clave evaluada (para paginación), la añadimos
+        // Si hay una clave para la siguiente página, la agregamos
         if ($lastEvaluatedKey) {
             $params['ExclusiveStartKey'] = $lastEvaluatedKey;
+        }
+
+        // Si hay una clave para la página anterior, la usamos para obtener los resultados hacia atrás
+        if ($previousEvaluatedKey) {
+            $params['ExclusiveStartKey'] = $previousEvaluatedKey;
+        }
+
+        // Si se pasó un término de búsqueda, filtramos por el campo RUC_CLIENTE
+        if ($searchTerm) {
+            // Aquí asumimos que el campo 'DOCUMENT_1' tiene una subclave 'RUC_CLIENTE'
+            $params['FilterExpression'] = 'contains(DOCUMENT_1.RUC_CLIENTE, :searchTerm)';
+            $params['ExpressionAttributeValues'] = [
+                ':searchTerm' => ['S' => $searchTerm], // 'S' es el tipo de atributo para strings en DynamoDB
+            ];
         }
 
         try {
             // Realizamos la consulta a DynamoDB
             $result = $this->dynamoDb->scan($params);
+
+            // Obtener el total de los elementos
+            //$totalItems = $this->getTotalItems(); // Aquí debes contar el total de elementos de la tabla
+
 
             // Mapeamos los resultados al formato deseado
             $items = array_map(function ($item) {
@@ -113,17 +131,32 @@ class DynamoDBService
             }, $result['Items']);
 
             $hasNextPage = isset($result['LastEvaluatedKey']);
+            $hasPreviousPage = $previousEvaluatedKey ? true : false;
 
             // Retornar los elementos y la clave de la siguiente página (si existe)
             return [
                 'items' => $items,
                 'hasNextPage' => $hasNextPage,
-                'lastEvaluatedKey' => $result['LastEvaluatedKey'] ?? null
+                'lastEvaluatedKey' => $hasNextPage ? $result['LastEvaluatedKey'] : null,
+                'hasPreviousPage' => $hasPreviousPage,
+                'previousEvaluatedKey' => $previousEvaluatedKey, // Retorna la clave para la página anterior
             ];
 
         } catch (DynamoDbException $e) {
             throw new \Exception('Could not fetch documents: ' . $e->getMessage());
         }
+    }
+
+    private function getTotalItems()
+    {
+        // Ejecutar un conteo total sobre la tabla de DynamoDB
+        $params = [
+            'TableName' =>  env('AWS_DYNAMODB_TABLE'),
+        ];
+
+        $result = $this->dynamoDb->scan($params);
+
+        return count($result['Items']); // Retorna la cantidad total de registros
     }
 
     public function fetchAllDocuments()
