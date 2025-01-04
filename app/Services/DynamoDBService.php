@@ -75,7 +75,7 @@ class DynamoDBService
         // Si se pasó un término de búsqueda, filtramos por el campo RUC_CLIENTE
         if ($searchTerm) {
             // Aquí asumimos que el campo 'DOCUMENT_1' tiene una subclave 'RUC_CLIENTE'
-            $params['FilterExpression'] = 'contains(DOCUMENT_1.RUC_CLIENTE, :searchTerm)';
+            $params['FilterExpression'] = 'contains(DOCUMENT_1.RUC_CLIENTE, :searchTerm) OR contains(DOCUMENT_1.NUMERO_FACTURA, :searchTerm)';//$params['FilterExpression'] = 'contains(DOCUMENT_1.RUC_CLIENTE, :searchTerm)';
             $params['ExpressionAttributeValues'] = [
                 ':searchTerm' => ['S' => $searchTerm], // 'S' es el tipo de atributo para strings en DynamoDB
             ];
