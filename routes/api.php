@@ -20,5 +20,5 @@ Route::resource('reports', ReportController::class);
 
 Route::post('document', [DynamoDBController::class, 'documento']);
 
-Route::get('consulta-athena', [AthenaController::class, 'executeQuery']);
+Route::post('consulta-athena', [AthenaController::class, 'executeQuery']);
 

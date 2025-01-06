@@ -24,64 +24,48 @@ class AthenaController extends Controller
         ]);
     }
 
+    // General endpoint to execute a query
     public function executeQuery(Request $request)
     {
-        $query = $request->input('query');  // Obtén la consulta SQL desde la solicitud
+        $query = $request->input('query');
 
-        if (empty($query)) {
+        if (!$query) {
             return response()->json(['error' => 'Query is required'], 400);
         }
 
         try {
-            $result = $this->executeAthenaQuery($query);
+            $result = $this->runAthenaQuery($query);
             return response()->json($result);
-        } catch (AwsException $e) {
+        } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
-    private function executeAthenaQuery($query)
+    private function runAthenaQuery($query)
     {
-        // Initiate the query execution
+        // Start query execution
         $result = $this->athenaClient->startQueryExecution([
             'QueryString' => $query,
             'QueryExecutionContext' => [
-                'Database' => 'document_apdayc_stage' // Reemplaza con tu base de datos de Athena
+                'Database' => env('AWS_ATHENA_DATABASE'), // Replace with your database
             ],
             'ResultConfiguration' => [
-                'OutputLocation' => 's3://datalake-cls-418295718835-artifactory-s3/athena_sql/ ', // Reemplaza con la ruta de salida en tu bucket S3
+                'OutputLocation' => env('AWS_ATHENA_OUTPUT'), // Replace with your S3 output path
             ],
         ]);
 
         $queryExecutionId = $result['QueryExecutionId'];
-        dd($queryExecutionId);
-        // Espera hasta que se complete la consulta
+
+        // Wait for query to finish
         $this->waitForQueryToFinish($queryExecutionId);
 
-        // Obtener los resultados de la consulta
+        // Get query results
         $queryResult = $this->athenaClient->getQueryResults([
-            'QueryExecutionId' => $queryExecutionId
+            'QueryExecutionId' => $queryExecutionId,
         ]);
 
-        // Procesar los resultados
-        $rows = $queryResult['ResultSet']['Rows'];
-        $result = [];
-        foreach ($rows as $row) {
-            $result[] = $this->processRow($row);
-        }
-
-        return $result;
-    }
-
-    private function processRow($row)
-    {
-        // Convertir los datos de Athena a un formato legible
-        $data = [];
-        foreach ($row['Data'] as $index => $cell) {
-            // Asumimos que los valores en las celdas son cadenas
-            $data[] = $cell['VarCharValue'] ?? null;
-        }
-        return $data;
+        // Parse the results
+        return $this->parseQueryResults($queryResult);
     }
 
     private function waitForQueryToFinish($queryExecutionId)
@@ -99,8 +83,25 @@ class AthenaController extends Controller
                 throw new \Exception("Query failed to run with status: " . $status);
             }
 
-            // Espera 5 segundos antes de comprobar de nuevo
+            // Wait 5 seconds before checking again
             sleep(5);
         }
+    }
+
+    private function parseQueryResults($queryResult)
+    {
+        $rows = $queryResult['ResultSet']['Rows'];
+        $result = [];
+
+        // Skip the first row (headers)
+        for ($i = 1; $i < count($rows); $i++) {
+            $data = array_map(function ($item) {
+                return $item['VarCharValue'] ?? null;
+            }, $rows[$i]['Data']);
+
+            $result[] = $data;
+        }
+
+        return $result;
     }
 }
