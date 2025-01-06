@@ -144,7 +144,7 @@ class DynamoDBService
                     $response['search_result'] = 'No encontrado';
                 }
 
-                $items = $response;
+                $items = $response['search_result'];
             }
 
 
