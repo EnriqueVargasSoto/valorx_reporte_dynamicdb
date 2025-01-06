@@ -144,8 +144,8 @@ class DynamoDBService
                     $response['search_result'] = 'No encontrado';
                 }
 
-                $items = [];
-                array_push($items,$response['search_result']);
+                $items = $response['search_result'];
+                //array_push($items,$response['search_result']);
             }
 
 
@@ -173,6 +173,8 @@ class DynamoDBService
             ],
         ];
 
+        $results = []; // Almacenar todos los resultados
+
         do {
             $result = $this->dynamoDb->scan($params);
 
@@ -184,7 +186,7 @@ class DynamoDBService
                     (isset($item['DOCUMENT_1']['M']['NUMERO_FACTURA']['S']) &&
                         strpos($item['DOCUMENT_1']['M']['NUMERO_FACTURA']['S'], $searchTerm) !== false)
                 ) {
-                    return [
+                    $results[] = [
                         'DOCUMENT_ID' => $item['DOCUMENT_ID']['S'] ?? null,
                         'AWS_LAMBDA_LOG_GROUP_NAME' => $item['AWS_LAMBDA_LOG_GROUP_NAME']['S'] ?? null,
                         'AWS_LAMBDA_LOG_STREAM_NAME' => $item['AWS_LAMBDA_LOG_STREAM_NAME']['S'] ?? null,
@@ -226,7 +228,7 @@ class DynamoDBService
             $params['ExclusiveStartKey'] = $result['LastEvaluatedKey'] ?? null;
         } while (isset($result['LastEvaluatedKey']));
 
-        return null; // No se encontró el término de búsqueda
+        return $results; // No se encontró el término de búsqueda
     }
 
     private function getTotalItems()
