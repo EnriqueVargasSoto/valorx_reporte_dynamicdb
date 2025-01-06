@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AthenaController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\DynamoDBController;
@@ -18,4 +19,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::resource('reports', ReportController::class);
 
 Route::post('document', [DynamoDBController::class, 'documento']);
+
+Route::get('consulta-athena', [AthenaController::class, 'executeQuery']);
 
