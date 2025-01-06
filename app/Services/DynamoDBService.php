@@ -83,6 +83,7 @@ class DynamoDBService
 
         try {
             // Realizamos la consulta a DynamoDB
+
             $result = $this->dynamoDb->scan($params);
 
             // Obtener el total de los elementos
@@ -133,6 +134,20 @@ class DynamoDBService
             $hasNextPage = isset($result['LastEvaluatedKey']);
             $hasPreviousPage = $previousEvaluatedKey ? true : false;
 
+            // Si se pasa un término de búsqueda, buscar en toda la tabla
+            if ($searchTerm) {
+                $foundItem = $this->searchFullTable($searchTerm);
+
+                if ($foundItem) {
+                    $response['search_result'] = $foundItem; // Resultado de la búsqueda
+                } else {
+                    $response['search_result'] = 'No encontrado';
+                }
+
+                $items = $response;
+            }
+
+
             // Retornar los elementos y la clave de la siguiente página (si existe)
             return [
                 'items' => $items,
@@ -145,6 +160,72 @@ class DynamoDBService
         } catch (DynamoDbException $e) {
             throw new \Exception('Could not fetch documents: ' . $e->getMessage());
         }
+    }
+
+    private function searchFullTable($searchTerm)
+    {
+        $params = [
+            'TableName' => env('AWS_DYNAMODB_TABLE'),
+            'FilterExpression' => 'contains(DOCUMENT_1.RUC_CLIENTE, :searchTerm) OR contains(DOCUMENT_1.NUMERO_FACTURA, :searchTerm)',
+            'ExpressionAttributeValues' => [
+                ':searchTerm' => ['S' => $searchTerm],
+            ],
+        ];
+
+        do {
+            $result = $this->dynamoDb->scan($params);
+
+            foreach ($result['Items'] as $item) {
+                // Verificar si el RUC o número de factura coinciden
+                if (
+                    (isset($item['DOCUMENT_1']['M']['RUC_CLIENTE']['S']) &&
+                        strpos($item['DOCUMENT_1']['M']['RUC_CLIENTE']['S'], $searchTerm) !== false) ||
+                    (isset($item['DOCUMENT_1']['M']['NUMERO_FACTURA']['S']) &&
+                        strpos($item['DOCUMENT_1']['M']['NUMERO_FACTURA']['S'], $searchTerm) !== false)
+                ) {
+                    return [
+                        'DOCUMENT_ID' => $item['DOCUMENT_ID']['S'] ?? null,
+                        'AWS_LAMBDA_LOG_GROUP_NAME' => $item['AWS_LAMBDA_LOG_GROUP_NAME']['S'] ?? null,
+                        'AWS_LAMBDA_LOG_STREAM_NAME' => $item['AWS_LAMBDA_LOG_STREAM_NAME']['S'] ?? null,
+                        'CREATED_DATE' => $item['CREATED_DATE']['S'] ?? null,
+                        'CREATED_USER' => $item['CREATED_USER']['S'] ?? null,
+                        'DOCUMENT_1' => [
+                            'DETALLE_FACTURA' => isset($item['DOCUMENT_1']['M']['DETALLE_FACTURA']['L'])
+                                ? array_map(function ($detalle) {
+                                    return [
+                                        'CODIGO' => $detalle['M']['CODIGO']['S'] ?? null,
+                                        'DESCRIPCION' => $detalle['M']['DESCRIPCION']['S'] ?? null,
+                                        'TOTAL_ITEM' => $detalle['M']['TOTAL_ITEM']['S'] ?? null,
+                                    ];
+                                }, $item['DOCUMENT_1']['M']['DETALLE_FACTURA']['L'])
+                                : [],
+                            'DIRECCION_CLIENTE' => $item['DOCUMENT_1']['M']['DIRECCION_CLIENTE']['S'] ?? null,
+                            'ESTADO_DOCUMENTO' => $item['DOCUMENT_1']['M']['ESTADO_DOCUMENTO']['S'] ?? null,
+                            'FECHA_EMISION' => $item['DOCUMENT_1']['M']['FECHA_EMISION']['S'] ?? null,
+                            'LOCAL' => $item['DOCUMENT_1']['M']['LOCAL']['S'] ?? null,
+                            'MONTO_EN_LETRAS' => $item['DOCUMENT_1']['M']['MONTO_EN_LETRAS']['S'] ?? null,
+                            'NATURALEZA_DOCUMENTO' => $item['DOCUMENT_1']['M']['NATURALEZA_DOCUMENTO']['S'] ?? null,
+                            'NUMERO_FACTURA' => $item['DOCUMENT_1']['M']['NUMERO_FACTURA']['S'] ?? null,
+                            'OBSERVACION' => $item['DOCUMENT_1']['M']['OBSERVACION']['S'] ?? null,
+                            'RUC_CLIENTE' => $item['DOCUMENT_1']['M']['RUC_CLIENTE']['S'] ?? null,
+                            'RUC_EMPRESA' => $item['DOCUMENT_1']['M']['RUC_EMPRESA']['S'] ?? null,
+                            'RUM' => $item['DOCUMENT_1']['M']['RUM']['S'] ?? null,
+                            'TOTAL_FACTURA' => $item['DOCUMENT_1']['M']['TOTAL_FACTURA']['S'] ?? null,
+                            'USUARIO' => $item['DOCUMENT_1']['M']['USUARIO']['S'] ?? null,
+                        ],
+                        'DOCUMENT_STRUCTURE_ID' => $item['DOCUMENT_STRUCTURE_ID']['S'] ?? null,
+                        'LLM_USED' => $item['LLM_USED']['S'] ?? null,
+                        'MODIFY_DATE' => $item['MODIFY_DATE']['S'] ?? null,
+                        'MODIFY_USER' => $item['MODIFY_USER']['S'] ?? null,
+                        'STATUS' => $item['STATUS']['S'] ?? null,
+                    ];
+                }
+            }
+
+            $params['ExclusiveStartKey'] = $result['LastEvaluatedKey'] ?? null;
+        } while (isset($result['LastEvaluatedKey']));
+
+        return null; // No se encontró el término de búsqueda
     }
 
     private function getTotalItems()

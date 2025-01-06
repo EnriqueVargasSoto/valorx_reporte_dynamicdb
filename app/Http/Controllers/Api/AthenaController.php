@@ -71,19 +71,21 @@ class AthenaController extends Controller
     private function waitForQueryToFinish($queryExecutionId)
     {
         while (true) {
-            $status = $this->athenaClient->getQueryExecution([
+            $execution = $this->athenaClient->getQueryExecution([
                 'QueryExecutionId' => $queryExecutionId,
-            ])['QueryExecution']['Status']['State'];
+            ]);
+
+            $status = $execution['QueryExecution']['Status']['State'];
+            $reason = $execution['QueryExecution']['Status']['StateChangeReason'] ?? 'No reason provided';
 
             if ($status == 'SUCCEEDED') {
                 break;
             }
 
             if ($status == 'FAILED' || $status == 'CANCELLED') {
-                throw new \Exception("Query failed to run with status: " . $status);
+                throw new \Exception("Query failed to run with status: $status. Reason: $reason");
             }
 
-            // Wait 5 seconds before checking again
             sleep(5);
         }
     }
