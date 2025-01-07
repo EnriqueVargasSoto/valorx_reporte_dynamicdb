@@ -52,6 +52,14 @@ class AthenaController extends Controller
 
     private function runAthenaQuery($query)
     {
+        $this->athenaClient = new AthenaClient([
+                     'version' => 'latest',
+                     'region'  => env('AWS_DEFAULT_REGION'),
+                     'credentials' => [
+                         'key'    => env('AWS_ACCESS_KEY_ID'),
+                         'secret' => env('AWS_SECRET_ACCESS_KEY'),
+                     ],
+                 ]);
         // Start query execution
         $result = $this->athenaClient->startQueryExecution([
             'QueryString' => $query,
