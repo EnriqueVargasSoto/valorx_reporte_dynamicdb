@@ -180,15 +180,17 @@ class AthenaService
     {
         // Crear la consulta dinámica usando la interpolación de valores en lugar de parámetros
         $sql = "
-            SELECT {$column}
-            FROM ".env('ATHENA_TABLE') ."
-            WHERE {$column} LIKE '%{$value}%'
-            LIMIT 5
-        ";
+            SELECT DISTINCT {$column}
+            FROM ".env('ATHENA_TABLE');
 
         // Ejecutar la consulta y devolver los resultados
         try {
-            return $this->executeAthenaQuery($sql);
+            $rucs = $this->executeAthenaQuery($sql);
+            // Mapear los resultados para convertirlos al formato { client_ruc: 'valor' }
+            $formattedRucs = array_map(function ($ruc)  use ($column) {
+                return [ $column  => $ruc];
+            }, $rucs);
+            return $formattedRucs;
         } catch (Exception $e) {
             throw new Exception('Error al ejecutar la consulta: ' . $e->getMessage());
         }
@@ -231,23 +233,45 @@ class AthenaService
             sleep(1);
         } while ($status !== 'SUCCEEDED');
 
-        // Step 3: Fetch Results
-        $results = $this->client->getQueryResults([
-            'QueryExecutionId' => $executionId,
-        ]);
-
-        // Filter the results to get only the 'client_ruc' values
+        // Step 3: Fetch Results with Pagination
         $clientRucValues = [];
-        foreach ($results['ResultSet']['Rows'] as $index => $row) {
-            if ($index === 0) {
-                continue; // Skip header row
+        $nextToken = null;
+
+        do {
+            // Construir la solicitud
+            $queryParams = [
+                'QueryExecutionId' => $executionId,
+            ];
+
+            if (!empty($nextToken)) {
+                $queryParams['NextToken'] = $nextToken; // Agregar solo si hay un valor válido
             }
 
-            $clientRucValues[] = $row['Data'][0]['VarCharValue']; // Assuming client_ruc is the first column
-        }
+            $results = $this->client->getQueryResults($queryParams);
+
+            foreach ($results['ResultSet']['Rows'] as $index => $row) {
+                // Saltar la fila del encabezado solo en la primera página
+                if ($nextToken === null && $index === 0) {
+                    continue;
+                }
+
+                // Verificar si la fila contiene la clave esperada
+                if (!isset($row['Data'][0]['VarCharValue'])) {
+                    continue; // Saltar filas que no tienen datos válidos
+                }
+
+                // Asumir que 'client_ruc' es la primera columna
+                $clientRucValues[] = $row['Data'][0]['VarCharValue'];
+            }
+
+            // Obtener el token para la siguiente página
+            $nextToken = $results['NextToken'] ?? null;
+        } while (!empty($nextToken));
 
         return $clientRucValues;
     }
+
+
 
 
 

@@ -161,7 +161,7 @@ class AthenaController extends Controller
         $value = $request->query('value'); // Valor a buscar por aproximación
 
         // Verificar que la columna y el valor sean proporcionados
-        if (empty($column) || empty($value)) {
+        if (empty($column) ) {
             return response()->json([
                 'success' => false,
                 'message' => 'Se debe proporcionar el nombre de la columna y el valor de búsqueda.',
