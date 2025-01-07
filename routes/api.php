@@ -22,3 +22,6 @@ Route::post('document', [DynamoDBController::class, 'documento']);
 
 Route::post('consulta-athena', [AthenaController::class, 'executeQuery']);
 
+Route::get('/athena/data', [AthenaController::class, 'getPaginatedData']);
+
+Route::get('/athena/column', [AthenaController::class, 'getColumnMatches']);  // Nueva ruta para buscar por columna

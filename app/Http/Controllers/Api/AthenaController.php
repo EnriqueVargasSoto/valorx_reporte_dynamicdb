@@ -6,22 +6,31 @@ use App\Http\Controllers\Controller;
 use Aws\Athena\AthenaClient;
 use Aws\Exception\AwsException;
 use Illuminate\Http\Request;
+use App\Services\AthenaService;
+use Exception;
 
 class AthenaController extends Controller
 {
     //
     protected $athenaClient;
 
-    public function __construct()
+    // public function __construct()
+    // {
+    //     $this->athenaClient = new AthenaClient([
+    //         'version' => 'latest',
+    //         'region'  => env('AWS_DEFAULT_REGION'),
+    //         'credentials' => [
+    //             'key'    => env('AWS_ACCESS_KEY_ID'),
+    //             'secret' => env('AWS_SECRET_ACCESS_KEY'),
+    //         ],
+    //     ]);
+    // }
+
+    protected $athenaService;
+
+    public function __construct(AthenaService $athenaService)
     {
-        $this->athenaClient = new AthenaClient([
-            'version' => 'latest',
-            'region'  => env('AWS_DEFAULT_REGION'),
-            'credentials' => [
-                'key'    => env('AWS_ACCESS_KEY_ID'),
-                'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            ],
-        ]);
+        $this->athenaService = $athenaService;
     }
 
     // General endpoint to execute a query
@@ -105,5 +114,66 @@ class AthenaController extends Controller
         }
 
         return $result;
+    }
+
+    public function getPaginatedData(Request $request)
+    {
+        $page = (int) $request->input('page', 1);
+        $limit = (int) $request->input('limit', 10);
+        $client_ruc = $request->input('client_ruc', null);  // Nuevo filtro opcional
+
+        try {
+            $paginationResults = $this->athenaService->fetchPaginatedData($page, $limit, $client_ruc);
+
+            // Procesar los datos para que estén en un formato útil
+            $data = [];
+            foreach ($paginationResults['data'] as $index => $row) {
+                if ($index === 0) {
+                    continue; // Omitir la primera fila de encabezado
+                }
+
+                $data[] = array_combine(
+                    array_map(fn ($col) => $col['VarCharValue'] ?? '', $paginationResults['data'][0]['Data']),
+                    array_map(fn ($col) => $col['VarCharValue'] ?? '', $row['Data'])
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'pagination' => $paginationResults['pagination'],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // Nueva función para obtener los primeros 5 registros de una columna dada
+    public function getColumnMatches(Request $request)
+    {
+        $column = $request->query('column'); // Nombre de la columna
+        $value = $request->query('value'); // Valor a buscar por aproximación
+
+        // Verificar que la columna y el valor sean proporcionados
+        if (empty($column) || empty($value)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Se debe proporcionar el nombre de la columna y el valor de búsqueda.',
+            ], 400);
+        }
+
+        // Intentar obtener los resultados
+        try {
+            $results = $this->athenaService->getColumnMatches($column, $value);
+            return response()->json(['data' => $results]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener los resultados: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }
