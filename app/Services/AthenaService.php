@@ -40,11 +40,12 @@ class AthenaService
         // Creamos la consulta base
         $query = "
             WITH numbered_data AS (
-            SELECT ROW_NUMBER() OVER (ORDER BY document_id) AS row_num, *
-            FROM ".env('ATHENA_TABLE')."
-            ORDER BY document_issue_date DESC";
+                SELECT ROW_NUMBER() OVER (ORDER BY document_issue_date DESC) AS row_num, *
+                FROM ".env('ATHENA_TABLE')."
+                WHERE status = 'SUCCESS'
+        ";
 
-        // Si tenemos un filtro, verificamos qué columna se ha especificado y aplicamos el filtro
+        // Si tenemos un filtro, agregamos la condición a la consulta
         if ($filter_column && $filter_value) {
             // Validamos si la columna es válida
             $valid_columns = ['client_ruc', 'document_number', 'document_location', 'client_name'];
@@ -53,15 +54,14 @@ class AthenaService
                 throw new \Exception("Columna no válida para el filtro.");
             }
 
-            // Aplicamos el filtro solo si se pasa un valor para la columna especificada
-            $query .= " WHERE $filter_column LIKE '%$filter_value%'";
+            // Concatenamos la condición del filtro
+            $query .= " AND $filter_column LIKE '%$filter_value%' ";
         }
 
-        // Continuamos con la consulta para la paginación
         $query .= ")
             SELECT *
             FROM numbered_data
-            WHERE row_num BETWEEN {$start} AND {$start} + {$limit} - 1 AND status='SUCCESS'
+            WHERE row_num BETWEEN {$start} AND {$start} + {$limit} - 1
         ";
 
         // Ejecutar la consulta
