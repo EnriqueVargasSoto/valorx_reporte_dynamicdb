@@ -42,7 +42,7 @@ class AthenaService
             WITH numbered_data AS (
             SELECT ROW_NUMBER() OVER (ORDER BY document_id) AS row_num, *
             FROM ".env('ATHENA_TABLE')."
-            ORDER BY document_issue_date DESC";
+            WHERE status='SUCCESS' ORDER BY document_issue_date DESC";
 
         // Si tenemos un filtro, verificamos qué columna se ha especificado y aplicamos el filtro
         if ($filter_column && $filter_value) {
