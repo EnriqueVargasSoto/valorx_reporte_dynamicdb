@@ -23,7 +23,7 @@ class AthenaService
         $this->database = env('AWS_ATHENA_DATABASE');
     }
 
-    public function fetchPaginatedData($page, $limit, $client_ruc = null)
+    public function fetchPaginatedData($page, $limit, $filter_column = null, $filter_value = null)
     {
         $start = (($page - 1) * $limit) + 1;
 
@@ -44,9 +44,17 @@ class AthenaService
             FROM ".env('ATHENA_TABLE')."
         ";
 
-        // Si tenemos un filtro de `client_ruc`, lo agregamos a la consulta
-        if ($client_ruc) {
-            $query .= " WHERE client_ruc LIKE '%$client_ruc%'";
+        // Si tenemos un filtro, verificamos qué columna se ha especificado y aplicamos el filtro
+        if ($filter_column && $filter_value) {
+            // Validamos si la columna es válida
+            $valid_columns = ['client_ruc', 'document_number', 'document_location', 'client_name'];
+
+            if (!in_array($filter_column, $valid_columns)) {
+                throw new \Exception("Columna no válida para el filtro.");
+            }
+
+            // Aplicamos el filtro solo si se pasa un valor para la columna especificada
+            $query .= " WHERE $filter_column LIKE '%$filter_value%'";
         }
 
         // Continuamos con la consulta para la paginación

@@ -120,10 +120,13 @@ class AthenaController extends Controller
     {
         $page = (int) $request->input('page', 1);
         $limit = (int) $request->input('limit', 10);
-        $client_ruc = $request->input('client_ruc', null);  // Nuevo filtro opcional
+        //$client_ruc = $request->input('client_ruc', null);  // Nuevo filtro opcional
+        // Se obtiene el filtro, puede ser cualquiera de las columnas: client_ruc, document_number, document_location, client_name
+        $filter_column = $request->input('filter_column', null);  // La columna por la cual filtrar
+        $filter_value = $request->input('filter_value', null);    // El valor para filtrar
 
         try {
-            $paginationResults = $this->athenaService->fetchPaginatedData($page, $limit, $client_ruc);
+            $paginationResults = $this->athenaService->fetchPaginatedData($page, $limit, $filter_column, $filter_value);
 
             // Procesar los datos para que estén en un formato útil
             $data = [];
