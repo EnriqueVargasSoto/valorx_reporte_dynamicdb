@@ -8,6 +8,7 @@ use Aws\Exception\AwsException;
 use Illuminate\Http\Request;
 use App\Services\AthenaService;
 use Exception;
+use Illuminate\Support\Facades\Storage;
 
 class AthenaController extends Controller
 {
@@ -186,5 +187,58 @@ class AthenaController extends Controller
                 'message' => 'Error al obtener los resultados: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function saveDataAsJson()
+    {
+        $column = 'client_name'; // Nombre de la columna
+
+        if (empty($column) ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Se debe proporcionar el nombre de la columna y el valor de búsqueda.',
+            ], 400);
+        }
+
+        // Verificar que la columna y el valor sean proporcionados
+        if (empty($column) ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Se debe proporcionar el nombre de la columna y el valor de búsqueda.',
+            ], 400);
+        }
+        // 1. Obtener los datos desde Athena
+        $data = $this->athenaService->getColumnMatches($column, null);
+
+        // 2. Convertir los datos a JSON
+        $jsonData = json_encode($data, JSON_PRETTY_PRINT);
+
+        // 3. Definir el nombre del archivo
+        $fileName = 'data/athena_data_client_name.json'; // Puedes personalizar la ruta y el nombre
+
+        // 4. Guardar el archivo en el sistema de archivos de Laravel
+        Storage::disk('local')->put($fileName, $jsonData);
+
+        return response()->json(['message' => 'Datos guardados en JSON correctamente', 'file' => $fileName]);
+    }
+
+    public function sendJsonData()
+    {
+        // 1. Leer el contenido del archivo JSON
+        $fileName = 'data/athena_data_client_name.json'; // Asegúrate de usar el nombre y ruta correctos
+
+        // Verificar si el archivo existe
+        if (!Storage::disk('local')->exists($fileName)) {
+            return response()->json(['error' => 'Archivo no encontrado'], 404);
+        }
+
+        // Obtener el contenido del archivo
+        $jsonContent = Storage::disk('local')->get($fileName);
+
+        // 2. Decodificar el JSON si es necesario (opcional)
+        $data = json_decode($jsonContent, true); // Devuelve un array asociativo
+
+        // 3. Enviar la respuesta JSON
+        return response()->json($data);
     }
 }
