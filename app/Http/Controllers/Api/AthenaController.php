@@ -241,4 +241,44 @@ class AthenaController extends Controller
         // 3. Enviar la respuesta JSON
         return response()->json($data);
     }
+
+    public function sendJsonDataSearch(Request $request)
+    {
+        // 1. Leer el contenido del archivo JSON
+        $fileName = 'data/athena_data_client_name.json'; // Asegúrate de usar el nombre y ruta correctos
+
+        // Verificar si el archivo existe
+        if (!Storage::disk('local')->exists($fileName)) {
+            return response()->json(['error' => 'Archivo no encontrado'], 404);
+        }
+
+        // Obtener el contenido del archivo
+        $jsonContent = Storage::disk('local')->get($fileName);
+
+        // 2. Decodificar el JSON
+        $data = json_decode($jsonContent, true); // Devuelve un array asociativo
+
+        // 3. Obtener el parámetro de búsqueda desde la solicitud
+        $searchString = $request->input('searchString'); // Obtén el string de búsqueda desde el cuerpo de la solicitud
+
+        // Si no se proporciona el string de búsqueda, devolver todos los datos
+        if (empty($searchString)) {
+            return response()->json($data);
+        }
+
+        // 4. Filtrar los datos que coincidan con el parámetro de búsqueda
+        $filteredData = array_filter($data, function($item) use ($searchString) {
+            // Ajusta esto según la clave por la cual deseas buscar. Por ejemplo, 'name' o 'description'.
+            return strpos(strtolower($item['client_name']), strtolower($searchString)) !== false;
+        });
+
+        // 5. Si no se encuentran coincidencias
+        if (empty($filteredData)) {
+            return response()->json(['message' => 'No se encontraron coincidencias'], 200);
+        }
+
+        // 6. Enviar los resultados filtrados como respuesta
+        return response()->json(array_values($filteredData)); // `array_values()` para reindexar el array
+    }
+
 }

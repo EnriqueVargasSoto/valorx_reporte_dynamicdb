@@ -29,3 +29,5 @@ Route::get('/athena/column', [AthenaController::class, 'getColumnMatches']);  //
 Route::get('guarda-nombre-clientes', [AthenaController::class, 'saveDataAsJson']);
 
 Route::get('enviar-data-json', [AthenaController::class, 'sendJsonData']);
+
+Route::post('json-client-search', [AthenaController::class, 'sendJsonDataSearch']);
