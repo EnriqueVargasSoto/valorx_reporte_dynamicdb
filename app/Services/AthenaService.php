@@ -37,6 +37,9 @@ class AthenaService
         //     FROM numbered_data
         //     WHERE row_num BETWEEN {$start} AND {$start} + {$limit} - 1
         // ";
+        // Escapar el valor del filtro para evitar errores de sintaxis
+        $escaped_filter_value = str_replace("'", "''", $filter_value);
+
         // Creamos la consulta base
         $query = "
             WITH numbered_data AS (
@@ -55,7 +58,7 @@ class AthenaService
             }
 
             // Concatenamos la condición del filtro
-            $query .= " AND $filter_column LIKE '%$filter_value%' ";
+            $query .= " AND $filter_column LIKE '%$escaped_filter_value%' ";
         }
 
         $query .= ")
