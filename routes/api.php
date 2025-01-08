@@ -26,7 +26,7 @@ Route::get('/athena/data', [AthenaController::class, 'getPaginatedData']);
 
 Route::get('/athena/column', [AthenaController::class, 'getColumnMatches']);  // Nueva ruta para buscar por columna
 
-Route::get('guarda-nombre-clientes', [AthenaController::class, 'saveDataAsJson']);
+Route::get('guarda-nombre-clientes/{column_json}', [AthenaController::class, 'saveDataAsJson']);
 
 Route::get('enviar-data-json', [AthenaController::class, 'sendJsonData']);
 

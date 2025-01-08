@@ -189,9 +189,9 @@ class AthenaController extends Controller
         }
     }
 
-    public function saveDataAsJson()
+    public function saveDataAsJson($column_json)
     {
-        $column = 'client_name'; // Nombre de la columna
+        $column = $column_json; // Nombre de la columna
 
         if (empty($column) ) {
             return response()->json([
@@ -214,7 +214,7 @@ class AthenaController extends Controller
         $jsonData = json_encode($data, JSON_PRETTY_PRINT);
 
         // 3. Definir el nombre del archivo
-        $fileName = 'data/athena_data_client_name.json'; // Puedes personalizar la ruta y el nombre
+        $fileName = 'data/athena_data_'.$column_json.'.json'; // Puedes personalizar la ruta y el nombre
 
         // 4. Guardar el archivo en el sistema de archivos de Laravel
         Storage::disk('local')->put($fileName, $jsonData);
@@ -245,7 +245,7 @@ class AthenaController extends Controller
     public function sendJsonDataSearch(Request $request)
     {
         // 1. Leer el contenido del archivo JSON
-        $fileName = 'data/athena_data_client_name.json'; // Asegúrate de usar el nombre y ruta correctos
+        $fileName = 'data/athena_data_'.$request->input('column_json').'.json'; // Asegúrate de usar el nombre y ruta correctos
 
         // Verificar si el archivo existe
         if (!Storage::disk('local')->exists($fileName)) {
@@ -267,9 +267,9 @@ class AthenaController extends Controller
         }
 
         // 4. Filtrar los datos que coincidan con el parámetro de búsqueda
-        $filteredData = array_filter($data, function($item) use ($searchString) {
+        $filteredData = array_filter($data, function($item) use ($searchString, $request) {
             // Ajusta esto según la clave por la cual deseas buscar. Por ejemplo, 'name' o 'description'.
-            return strpos(strtolower($item['client_name']), strtolower($searchString)) !== false;
+            return strpos(strtolower($item[$request->input('column_json')]), strtolower($searchString)) !== false;
         });
 
         // 5. Si no se encuentran coincidencias
