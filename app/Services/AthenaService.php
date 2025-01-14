@@ -23,7 +23,7 @@ class AthenaService
         $this->database = env('AWS_ATHENA_DATABASE');
     }
 
-    public function fetchPaginatedData($page, $limit, $filter_column = null, $filter_value = null)
+    public function fetchPaginatedData($page, $limit, $filter_column = null, $filter_value = null, $status = null)
     {
         $start = (($page - 1) * $limit) + 1;
 
@@ -45,7 +45,7 @@ class AthenaService
             WITH numbered_data AS (
                 SELECT ROW_NUMBER() OVER (ORDER BY document_issue_date DESC) AS row_num, *
                 FROM ".env('ATHENA_TABLE')."
-                WHERE status = 'SUCCESS'
+                WHERE status = '".$status."'
         ";
 
         // Si tenemos un filtro, agregamos la condición a la consulta
