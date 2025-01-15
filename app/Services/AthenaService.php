@@ -23,21 +23,10 @@ class AthenaService
         $this->database = env('AWS_ATHENA_DATABASE');
     }
 
-    public function fetchPaginatedData($page, $limit, $filter_column = null, $filter_value = null, $status = null)
+    public function fetchPaginatedData($page, $limit, $filter_column = null, $filter_value = null, $estado = null)
     {
         $start = (($page - 1) * $limit) + 1;
 
-        // Consulta para obtener los resultados paginados
-        // $query = "
-        //     WITH numbered_data AS (
-        //         SELECT ROW_NUMBER() OVER (ORDER BY document_id) AS row_num, *
-        //         FROM " . env('ATHENA_TABLE') . "
-        //     )
-        //     SELECT *
-        //     FROM numbered_data
-        //     WHERE row_num BETWEEN {$start} AND {$start} + {$limit} - 1
-        // ";
-        // Escapar el valor del filtro para evitar errores de sintaxis
         $escaped_filter_value = str_replace("'", "''", $filter_value);
 
         // Creamos la consulta base
@@ -45,7 +34,7 @@ class AthenaService
             WITH numbered_data AS (
                 SELECT ROW_NUMBER() OVER (ORDER BY document_issue_date DESC) AS row_num, *
                 FROM ".env('ATHENA_TABLE')."
-                WHERE status = '".$status."'
+                WHERE status = '".$estado."'
         ";
 
         // Si tenemos un filtro, agregamos la condición a la consulta
@@ -106,7 +95,7 @@ class AthenaService
         ]);
 
         // Obtener el total de registros
-        $totalCount = $this->getTotalCount();
+        $totalCount = $this->getTotalCount($filter_column, $filter_value, $estado);
 
         // Calcular información de paginación
         $totalPages = (int) ceil($totalCount / $limit);
@@ -132,11 +121,26 @@ class AthenaService
         ];
     }
 
-    public function getTotalCount()
+    public function getTotalCount($filter_column = null, $filter_value = null, $status = null)
     {
-        // Consulta para contar el total de registros
-        $query = "SELECT COUNT(*) AS total FROM " . env('ATHENA_TABLE');
+        $escaped_filter_value = str_replace("'", "''", $filter_value);
 
+        // Consulta para contar el total de registros
+        $query = "SELECT COUNT(*) AS total FROM " . env('ATHENA_TABLE') ." WHERE status='".$status."'";
+
+        // Si tenemos un filtro, agregamos la condición a la consulta
+        if ($filter_column && $filter_value) {
+            // Validamos si la columna es válida
+            $valid_columns = ['client_ruc', 'document_number', 'document_location', 'client_name'];
+
+            if (!in_array($filter_column, $valid_columns)) {
+                throw new \Exception("Columna no válida para el filtro.");
+            }
+
+            // Concatenamos la condición del filtro
+            $query .= " AND $filter_column LIKE '%$escaped_filter_value%' ";
+        }
+        
         // Ejecutar la consulta para contar el total de registros
         $executionResponse = $this->client->startQueryExecution([
             'QueryString' => $query,
