@@ -12,21 +12,6 @@ use Illuminate\Support\Facades\Storage;
 
 class AthenaController extends Controller
 {
-    //
-    protected $athenaClient;
-
-    // public function __construct()
-    // {
-    //     $this->athenaClient = new AthenaClient([
-    //         'version' => 'latest',
-    //         'region'  => env('AWS_DEFAULT_REGION'),
-    //         'credentials' => [
-    //             'key'    => env('AWS_ACCESS_KEY_ID'),
-    //             'secret' => env('AWS_SECRET_ACCESS_KEY'),
-    //         ],
-    //     ]);
-    // }
-
     protected $athenaService;
 
     public function __construct(AthenaService $athenaService)
