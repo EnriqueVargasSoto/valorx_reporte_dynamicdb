@@ -32,7 +32,7 @@ class AthenaService
         // Creamos la consulta base
         $query = "
             WITH numbered_data AS (
-                SELECT ROW_NUMBER() OVER (ORDER BY document_issue_date DESC) AS row_num, *
+                SELECT ROW_NUMBER() OVER (ORDER BY created_date DESC) AS row_num, *
                 FROM ".env('ATHENA_TABLE')."
                 WHERE status = '".$estado."'
         ";
@@ -140,7 +140,7 @@ class AthenaService
             // Concatenamos la condición del filtro
             $query .= " AND $filter_column LIKE '%$escaped_filter_value%' ";
         }
-        
+
         // Ejecutar la consulta para contar el total de registros
         $executionResponse = $this->client->startQueryExecution([
             'QueryString' => $query,
