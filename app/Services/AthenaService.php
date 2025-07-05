@@ -23,7 +23,7 @@ class AthenaService
         $this->database = env('AWS_ATHENA_DATABASE');
     }
 
-    public function fetchPaginatedData($page, $limit, $filter_column = null, $filter_value = null, $estado = null)
+    public function fetchPaginatedDataOld($page, $limit, $filter_column = null, $filter_value = null, $estado = null)
     {
         $start = (($page - 1) * $limit) + 1;
 
@@ -55,7 +55,6 @@ class AthenaService
             FROM numbered_data
             WHERE row_num BETWEEN {$start} AND {$start} + {$limit} - 1
         ";
-
         // Ejecutar la consulta
         $executionResponse = $this->client->startQueryExecution([
             'QueryString' => $query,
@@ -117,11 +116,124 @@ class AthenaService
                 'to' => $to,
                 'previous_page' => $previousPage,
                 'next_page' => $nextPage,
+                'query' => $query, // Consulta ejecutada
             ]
         ];
     }
 
-    public function getTotalCount($filter_column = null, $filter_value = null, $status = null)
+    public function fetchPaginatedData($page, $limit, $filter_column = null, $filter_value = null, $estado = null)
+    {
+        $start = (($page - 1) * $limit) + 1;
+        $end = $start + $limit - 1;
+
+        $escaped_filter_value = str_replace("'", "''", $filter_value);
+
+        // Valid columns to prevent SQL injection
+        $valid_columns = ['client_ruc', 'document_number', 'document_location', 'client_name'];
+        $filter_condition = '';
+
+        // Optional filter
+        if ($filter_column && $filter_value) {
+            if (!in_array($filter_column, $valid_columns)) {
+                throw new \Exception("Columna no válida para el filtro.");
+            }
+            $filter_condition = " AND $filter_column LIKE '%$escaped_filter_value%' ";
+        }
+
+        // Main query adapted to Athena
+        $query = "
+            WITH base_data AS (
+                SELECT *,
+                    ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY modify_date ASC) AS rn_partition
+                FROM " . env('ATHENA_TABLE') . "
+            ),
+            limited_docs AS (
+                SELECT *
+                FROM base_data
+                WHERE rn_partition = 1
+                LIMIT 2644539
+            ),
+            filtered_data AS (
+                SELECT *
+                FROM limited_docs
+                WHERE status = '" . $estado . "' $filter_condition
+            ),
+            paged_docs AS (
+                SELECT *,
+                    ROW_NUMBER() OVER (ORDER BY created_date DESC) AS rn_page
+                FROM filtered_data
+            )
+            SELECT *
+            FROM paged_docs
+            WHERE rn_page BETWEEN {$start} AND {$end}
+        ";
+
+        // Ejecutar la consulta
+        $executionResponse = $this->client->startQueryExecution([
+            'QueryString' => $query,
+            'QueryExecutionContext' => [
+                'Database' => $this->database,
+            ],
+            'ResultConfiguration' => [
+                'OutputLocation' => env('AWS_ATHENA_OUTPUT'),
+            ],
+        ]);
+
+        $executionId = $executionResponse['QueryExecutionId'];
+
+        // Esperar a que termine
+        do {
+            $queryStatus = $this->client->getQueryExecution([
+                'QueryExecutionId' => $executionId,
+            ]);
+
+            $status = $queryStatus['QueryExecution']['Status']['State'];
+
+            if ($status === 'FAILED') {
+                throw new \Exception('Query failed: ' . $queryStatus['QueryExecution']['Status']['StateChangeReason']);
+            }
+
+            if ($status === 'CANCELLED') {
+                throw new \Exception('Query was cancelled.');
+            }
+
+            sleep(1);
+        } while ($status !== 'SUCCEEDED');
+
+        // Obtener resultados
+        $results = $this->client->getQueryResults([
+            'QueryExecutionId' => $executionId,
+        ]);
+
+        // ❗️ Importante: si el total también debe ser limitado al universo de los 2.6 millones,
+        // ajusta la función getTotalCount() para aplicar la misma lógica.
+        $totalCount = $this->getTotalCount($filter_column, $filter_value, $estado);
+
+        $totalPages = (int) ceil($totalCount / $limit);
+        $currentPage = (int) $page;
+        $from = $start;
+        $to = min($start + $limit - 1, $totalCount);
+        $previousPage = $currentPage > 1 ? $currentPage - 1 : null;
+        $nextPage = $currentPage < $totalPages ? $currentPage + 1 : null;
+
+        return [
+            'data' => $results['ResultSet']['Rows'],
+            'pagination' => [
+                'current_page' => $currentPage,
+                'per_page' => (int) $limit,
+                'total' => (int) $totalCount,
+                'total_pages' => $totalPages,
+                'from' => $from,
+                'to' => $to,
+                'previous_page' => $previousPage,
+                'next_page' => $nextPage,
+                'query' => $query,
+            ]
+        ];
+    }
+
+
+    public function getTotalCountOld($filter_column = null, $filter_value = null, $status = null)
     {
         $escaped_filter_value = str_replace("'", "''", $filter_value);
 
@@ -181,6 +293,84 @@ class AthenaService
 
         return $results['ResultSet']['Rows'][1]['Data'][0]['VarCharValue']; // Total de registros
     }
+
+    public function getTotalCount($filter_column = null, $filter_value = null, $status = null)
+    {
+        $escaped_filter_value = str_replace("'", "''", $filter_value);
+
+        // Validar columnas seguras
+        $valid_columns = ['client_ruc', 'document_number', 'document_location', 'client_name'];
+        $filter_condition = '';
+
+        if ($filter_column && $filter_value) {
+            if (!in_array($filter_column, $valid_columns)) {
+                throw new \Exception("Columna no válida para el filtro.");
+            }
+            $filter_condition = " AND $filter_column LIKE '%$escaped_filter_value%' ";
+        }
+
+        // Consulta adaptada con deduplicación y límite
+        $query = "
+            WITH base_data AS (
+                SELECT *,
+                    ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY modify_date ASC) AS rn_partition
+                FROM " . env('ATHENA_TABLE') . "
+            ),
+            limited_docs AS (
+                SELECT *
+                FROM base_data
+                WHERE rn_partition = 1
+                LIMIT 2644539
+            ),
+            filtered_docs AS (
+                SELECT *
+                FROM limited_docs
+                WHERE status = '" . $status . "' $filter_condition
+            )
+            SELECT COUNT(*) AS total
+            FROM filtered_docs
+        ";
+
+        // Ejecutar la consulta
+        $executionResponse = $this->client->startQueryExecution([
+            'QueryString' => $query,
+            'QueryExecutionContext' => [
+                'Database' => $this->database,
+            ],
+            'ResultConfiguration' => [
+                'OutputLocation' => env('AWS_ATHENA_OUTPUT'),
+            ],
+        ]);
+
+        $executionId = $executionResponse['QueryExecutionId'];
+
+        // Esperar a que termine
+        do {
+            $queryStatus = $this->client->getQueryExecution([
+                'QueryExecutionId' => $executionId,
+            ]);
+
+            $state = $queryStatus['QueryExecution']['Status']['State'];
+
+            if ($state === 'FAILED') {
+                throw new \Exception('Query failed: ' . $queryStatus['QueryExecution']['Status']['StateChangeReason']);
+            }
+
+            if ($state === 'CANCELLED') {
+                throw new \Exception('Query was cancelled.');
+            }
+
+            sleep(1);
+        } while ($state !== 'SUCCEEDED');
+
+        // Obtener los resultados
+        $results = $this->client->getQueryResults([
+            'QueryExecutionId' => $executionId,
+        ]);
+
+        return (int) $results['ResultSet']['Rows'][1]['Data'][0]['VarCharValue'];
+    }
+
 
     // Función para obtener los primeros 5 registros de una columna dada
     public function getColumnMatches($column, $value)
