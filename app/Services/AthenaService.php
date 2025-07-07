@@ -127,45 +127,38 @@ class AthenaService
         $end = $start + $limit - 1;
 
         $escaped_filter_value = str_replace("'", "''", $filter_value);
-
-        // Valid columns to prevent SQL injection
         $valid_columns = ['client_ruc', 'document_number', 'document_location', 'client_name'];
-        $filter_condition = '';
 
-        // Optional filter
+        $where_clauses = [];
+
+        // Validar columna y construir cláusula WHERE si hay filtro
         if ($filter_column && $filter_value) {
             if (!in_array($filter_column, $valid_columns)) {
                 throw new \Exception("Columna no válida para el filtro.");
             }
-            $filter_condition = " AND $filter_column LIKE '%$escaped_filter_value%' ";
+            $where_clauses[] = "$filter_column LIKE '%$escaped_filter_value%'";
         }
 
-        // Main query adapted to Athena
+        // Convertir cláusulas en string
+        $where_sql = '';
+        if (count($where_clauses) > 0) {
+            $where_sql = 'WHERE ' . implode(' AND ', $where_clauses);
+        }
+
+        // Elegir vista según estado
+        $vista = $estado === 'SUCCESS' ? 'vw_documents_scs' : 'vw_documents_fail';
+
+        // Construir consulta paginada
         $query = "
-            WITH base_data AS (
+            WITH paged_docs AS (
                 SELECT *,
-                    ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY modify_date ASC) AS rn_partition
-                FROM " . env('ATHENA_TABLE') . "
-            ),
-            limited_docs AS (
-                SELECT *
-                FROM base_data
-                WHERE rn_partition = 1
-                LIMIT 2644539
-            ),
-            filtered_data AS (
-                SELECT *
-                FROM limited_docs
-                WHERE status = '" . $estado . "' $filter_condition
-            ),
-            paged_docs AS (
-                SELECT *,
-                    ROW_NUMBER() OVER (ORDER BY created_date DESC) AS rn_page
-                FROM filtered_data
+                    ROW_NUMBER() OVER (ORDER BY modify_user DESC, created_date DESC) AS rn
+                FROM $vista
+                $where_sql
             )
             SELECT *
             FROM paged_docs
-            WHERE rn_page BETWEEN {$start} AND {$end}
+            WHERE rn BETWEEN {$start} AND {$end}
         ";
 
         // Ejecutar la consulta
@@ -181,12 +174,11 @@ class AthenaService
 
         $executionId = $executionResponse['QueryExecutionId'];
 
-        // Esperar a que termine
+        // Esperar a que finalice la consulta
         do {
             $queryStatus = $this->client->getQueryExecution([
                 'QueryExecutionId' => $executionId,
             ]);
-
             $status = $queryStatus['QueryExecution']['Status']['State'];
 
             if ($status === 'FAILED') {
@@ -205,8 +197,7 @@ class AthenaService
             'QueryExecutionId' => $executionId,
         ]);
 
-        // ❗️ Importante: si el total también debe ser limitado al universo de los 2.6 millones,
-        // ajusta la función getTotalCount() para aplicar la misma lógica.
+        // Obtener el total para la paginación
         $totalCount = $this->getTotalCount($filter_column, $filter_value, $estado);
 
         $totalPages = (int) ceil($totalCount / $limit);
@@ -231,6 +222,8 @@ class AthenaService
             ]
         ];
     }
+
+
 
 
     public function getTotalCountOld($filter_column = null, $filter_value = null, $status = null)
@@ -298,38 +291,24 @@ class AthenaService
     {
         $escaped_filter_value = str_replace("'", "''", $filter_value);
 
-        // Validar columnas seguras
+        // Valid columns to prevent SQL injection
         $valid_columns = ['client_ruc', 'document_number', 'document_location', 'client_name'];
-        $filter_condition = '';
 
+        // Elegir la vista según el estado
+        $table = $status === 'SUCCESS' ? 'vw_documents_scs' : 'vw_documents_fail';
+
+        // Base query
+        $query = "SELECT COUNT(*) AS total FROM {$table}";
+
+        // Agregar filtro si corresponde
         if ($filter_column && $filter_value) {
             if (!in_array($filter_column, $valid_columns)) {
                 throw new \Exception("Columna no válida para el filtro.");
             }
-            $filter_condition = " AND $filter_column LIKE '%$escaped_filter_value%' ";
-        }
 
-        // Consulta adaptada con deduplicación y límite
-        $query = "
-            WITH base_data AS (
-                SELECT *,
-                    ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY modify_date ASC) AS rn_partition
-                FROM " . env('ATHENA_TABLE') . "
-            ),
-            limited_docs AS (
-                SELECT *
-                FROM base_data
-                WHERE rn_partition = 1
-                LIMIT 2644539
-            ),
-            filtered_docs AS (
-                SELECT *
-                FROM limited_docs
-                WHERE status = '" . $status . "' $filter_condition
-            )
-            SELECT COUNT(*) AS total
-            FROM filtered_docs
-        ";
+            // Agregar cláusula WHERE correctamente
+            $query .= " WHERE {$filter_column} = '{$escaped_filter_value}'";
+        }
 
         // Ejecutar la consulta
         $executionResponse = $this->client->startQueryExecution([
@@ -344,32 +323,34 @@ class AthenaService
 
         $executionId = $executionResponse['QueryExecutionId'];
 
-        // Esperar a que termine
+        // Esperar que termine
         do {
             $queryStatus = $this->client->getQueryExecution([
                 'QueryExecutionId' => $executionId,
             ]);
 
-            $state = $queryStatus['QueryExecution']['Status']['State'];
+            $queryState = $queryStatus['QueryExecution']['Status']['State'];
 
-            if ($state === 'FAILED') {
+            if ($queryState === 'FAILED') {
                 throw new \Exception('Query failed: ' . $queryStatus['QueryExecution']['Status']['StateChangeReason']);
             }
 
-            if ($state === 'CANCELLED') {
+            if ($queryState === 'CANCELLED') {
                 throw new \Exception('Query was cancelled.');
             }
 
             sleep(1);
-        } while ($state !== 'SUCCEEDED');
+        } while ($queryState !== 'SUCCEEDED');
 
-        // Obtener los resultados
+        // Obtener resultado
         $results = $this->client->getQueryResults([
             'QueryExecutionId' => $executionId,
         ]);
 
+        // Devolver el número total
         return (int) $results['ResultSet']['Rows'][1]['Data'][0]['VarCharValue'];
     }
+
 
 
     // Función para obtener los primeros 5 registros de una columna dada
